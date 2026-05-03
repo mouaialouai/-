@@ -58,40 +58,38 @@ export default function App() {
     // Check for code in URL
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
-    if (code) {
+    if (code && !sessionId) {
       setSessionId(code.toUpperCase());
     }
 
     return onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
+      // If we have a user and they're not in the session yet, we'll wait for them to click join
     });
-  }, []);
-
-  const authenticate = async () => {
-    if (user) return user;
-    try {
-      // In this environment, Google Auth is the pre-configured method.
-      // We'll trigger the login modal if not already signed in.
-      const res = await signInWithPopup(auth, googleProvider);
-      return res.user;
-    } catch (error: any) {
-      console.error("Auth failed", error);
-      setAuthError("يرجى تسجيل الدخول باستخدام حساب جوجل للمتابعة.");
-      throw error;
-    }
-  };
+  }, [sessionId]);
 
   const loginWithGoogle = async () => {
     try {
       setLoading(true);
-      await signInWithPopup(auth, googleProvider);
+      const res = await signInWithPopup(auth, googleProvider);
+      setUser(res.user);
       setAuthError(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      if (error.code === 'auth/popup-blocked') {
+        alert('يرجى السماح بالنوافذ المنبثقة (Popups) في متصفحك لتتمكن من تسجيل الدخول.');
+      } else {
+        setAuthError("فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.");
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const authenticate = async () => {
+    if (user) return user;
+    return await loginWithGoogle().then(() => auth.currentUser);
   };
 
   // Listen to Session
@@ -213,6 +211,7 @@ export default function App() {
             onClick={() => {
               if (confirm('هل أنت متأكد من الخروج والعودة للرئيسية؟')) {
                 setSessionId('');
+                window.history.replaceState({}, '', window.location.pathname);
               }
             }}
             className="flex items-center gap-2 bg-white/5 hover:bg-red-500/20 hover:text-red-500 border border-white/10 px-4 py-2 rounded-full transition-all text-sm font-bold backdrop-blur-md"
@@ -223,20 +222,32 @@ export default function App() {
         </div>
       )}
 
-      {/* Auth Error Modal */}
-      {authError && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="luxury-card p-8 rounded-3xl max-w-sm w-full text-center space-y-6 border border-[#c5a059]">
-            <Globe className="w-12 h-12 text-[#c5a059] mx-auto" />
-            <h3 className="text-xl font-bold">يتطلب تسجيل الدخول</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">{authError}</p>
+      {/* Login Screen Overlay */}
+      {!user && !loading && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="luxury-card p-10 rounded-[3rem] max-w-md w-full text-center space-y-8 border border-[#c5a059]"
+          >
+            <div className="space-y-4">
+               <Trophy className="w-20 h-20 text-[#c5a059] mx-auto animate-bounce" />
+               <h2 className="text-4xl font-serif font-black algeria-text-gradient">ثورة الأحرار</h2>
+               <p className="text-gray-400 leading-relaxed">
+                 للمشاركة في المنافسة التاريخية، يرجى تسجيل الدخول باستخدام حساب جوجل الخاص بك.
+               </p>
+            </div>
+            
             <button 
               onClick={loginWithGoogle}
-              className="w-full bg-[#c5a059] text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-[#b08d48] transition-all"
+              className="w-full bg-[#c5a059] text-white py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-3 hover:bg-[#b08d48] transition-all shadow-[0_0_30px_rgba(197,160,89,0.3)]"
             >
+              <Globe className="w-6 h-6" />
               الدخول باستخدام جوجل
             </button>
-          </div>
+            
+            {authError && <p className="text-red-500 text-sm font-bold">{authError}</p>}
+          </motion.div>
         </div>
       )}
 
@@ -350,23 +361,46 @@ export default function App() {
           </motion.div>
         ) : (
           <AnimatePresence mode="wait">
-            {session?.status === 'LOBBY' && (
+            {(!player && sessionId) ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="luxury-card p-8 rounded-3xl max-w-md mx-auto text-center space-y-6"
+              >
+                <div className="space-y-2">
+                   <h2 className="text-2xl font-bold">الانضمام للمسابقة</h2>
+                   <p className="text-gray-400">لقد تمت دعوتك للمسابقة بكود: <span className="text-[#c5a059] font-black">{sessionId}</span></p>
+                </div>
+                <input
+                    type="text"
+                    placeholder="اكتب اسمك الكريم هنا"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#c5a059] transition-all text-center text-xl"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                />
+                <button
+                    onClick={() => joinSession(sessionId, playerName)}
+                    disabled={!playerName}
+                    className="w-full algeria-gradient text-white py-4 rounded-xl font-black text-xl disabled:opacity-50"
+                >
+                    دخول الآن
+                </button>
+              </motion.div>
+            ) : session?.status === 'LOBBY' ? (
               <LobbyView 
                 session={session} 
                 players={allPlayers} 
                 isHost={isHost} 
                 onStart={() => updateDoc(doc(db, 'sessions', sessionId), { status: 'QUESTION' })}
               />
-            )}
-            {(session?.status === 'QUESTION' || session?.status === 'REVEAL') && (
+            ) : (session?.status === 'QUESTION' || session?.status === 'REVEAL') ? (
               <PlayerGame 
                 session={session} 
                 player={player!} 
                 isHost={isHost}
                 onCorrect={() => playCorrect()}
               />
-            )}
-             {session?.status === 'LEADERBOARD' && (
+            ) : session?.status === 'LEADERBOARD' ? (
               <div className="flex flex-col items-center space-y-8">
                 <h2 className="text-4xl font-bold algeria-text-gradient">المتصدرون حالياً</h2>
                 <div className="w-full space-y-4">
@@ -410,14 +444,16 @@ export default function App() {
                   </button>
                 )}
               </div>
-            )}
-            {session?.status === 'FINAL_RESULTS' && (
+            ) : session?.status === 'FINAL_RESULTS' ? (
               <FinalResults 
                 players={allPlayers} 
-                onReset={() => setSessionId('')}
+                onReset={() => {
+                   setSessionId('');
+                   window.history.replaceState({}, '', window.location.pathname);
+                }}
                 isHost={isHost}
               />
-            )}
+            ) : null}
           </AnimatePresence>
         )}
       </main>

@@ -10,23 +10,13 @@ service cloud.firestore {
     function existing() { return resource.data; }
 
     match /sessions/{sessionId} {
-      // السماح للجميع بالقراءة لرؤية حالة المسابقة والأسئلة
       allow read: if true;
-      
-      // السماح للمضيف بإنشاء المسابقة
       allow create: if isSignedIn();
-      
-      // السماح للمضيف بالتعديل الكامل، وللمشاركين بتعديل سجل الفوز الأسرع فقط
-      allow update: if isSignedIn() && (
-        existing().hostId == request.auth.uid ||
-        incoming().diff(existing()).affectedKeys().hasOnly(['winnerRecord', 'status'])
-      );
-      
+      allow update: if isSignedIn();
       allow delete: if isSignedIn() && existing().hostId == request.auth.uid;
 
       match /players/{playerId} {
         allow read: if true;
-        // اللاعب يكتب بياناته الخاصة فقط والمضيف يمكنه رؤيتها
         allow write: if isSignedIn() && (playerId == request.auth.uid || get(/databases/$(database)/documents/sessions/$(sessionId)).data.hostId == request.auth.uid);
       }
 
