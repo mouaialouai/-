@@ -81,6 +81,24 @@ export default function App() {
     });
   }, [sessionId]);
 
+  const authenticate = async () => {
+    if (user) return user;
+    try {
+      setLoading(true);
+      const res = await signInAnonymously(auth);
+      setUser(res.user);
+      setLoading(false);
+      return res.user;
+    } catch (error: any) {
+      console.error("Anonymous auth failed", error);
+      if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/operation-not-allowed') {
+        setAuthError("يرجى تفعيل 'الدخول المجهول' في إعدادات Firebase للمتابعة.");
+      }
+      setLoading(false);
+      return null;
+    }
+  };
+
   const loginWithGoogle = async () => {
     try {
       setLoading(true);
@@ -88,34 +106,11 @@ export default function App() {
       setUser(res.user);
       setAuthError(null);
     } catch (error: any) {
-      console.error("Popup Error:", error);
-      if (error.code === 'auth/popup-blocked') {
-        setAuthError('تم حظر النافذة المنبثقة. جرب استخدام "تسجيل الدخول المباشر" بالأسفل.');
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        setAuthError('تم إغلاق نافذة تسجيل الدخول قبل إكمال العملية.');
-      } else {
-        setAuthError(`فشل تسجيل الدخول (${error.code}). جرب الطريقة البديلة.`);
-      }
+      console.error("Login error:", error);
+      setAuthError("فشل تسجيل الدخول باستخدام جوجل.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const loginWithGoogleRedirect = async () => {
-    try {
-      setLoading(true);
-      await signInWithRedirect(auth, googleProvider);
-    } catch (error: any) {
-      console.error("Redirect Error:", error);
-      setAuthError(`فشل التوجيه: ${error.message}`);
-      setLoading(false);
-    }
-  };
-
-  const authenticate = async () => {
-    if (user) return user;
-    // For automatic auth flow, prefer popup if possible, else prompt
-    return await loginWithGoogle().then(() => auth.currentUser);
   };
 
   // Listen to Session
@@ -123,14 +118,27 @@ export default function App() {
     if (!sessionId) return;
     const unsub = onSnapshot(doc(db, 'sessions', sessionId), (doc) => {
       if (doc.exists()) {
-        setSession({ id: doc.id, ...doc.data() } as GameSession);
+        const data = doc.data() as GameSession;
+        setSession({ id: doc.id, ...data } as GameSession);
+        
+        // Auto-detect host based on UID
+        if (user && data.hostId === user.uid) {
+          setIsHost(true);
+        } else if (user && data.hostId !== user.uid) {
+           // If we're not the host by UID, check if we claim host by email (teacher fallback)
+           if (user.email === 'mouaialouai4@gmail.com') {
+             setIsHost(true);
+           } else {
+             setIsHost(false);
+           }
+        }
       } else {
         setSession(null);
         setSessionId('');
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, `sessions/${sessionId}`));
     return unsub;
-  }, [sessionId]);
+  }, [sessionId, user]);
 
   // Listen to Players
   useEffect(() => {
@@ -149,6 +157,11 @@ export default function App() {
     try {
       setLoading(true);
       const res = await authenticate();
+      if (!res) {
+        setLoading(false);
+        return;
+      }
+      
       const sId = Math.random().toString(36).substring(2, 8).toUpperCase();
       
       // Select random questions
@@ -192,6 +205,11 @@ export default function App() {
     try {
       setLoading(true);
       const res = await authenticate();
+      if (!res) {
+        setLoading(false);
+        return;
+      }
+      
       const sessionDoc = await getDoc(doc(db, 'sessions', id));
       
       if (!sessionDoc.exists()) {
@@ -248,46 +266,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Login Screen Overlay */}
-      {!user && !loading && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="luxury-card p-10 rounded-[3rem] max-w-md w-full text-center space-y-8 border border-[#c5a059]"
-          >
-            <div className="space-y-4">
-               <Trophy className="w-20 h-20 text-[#c5a059] mx-auto animate-bounce" />
-               <h2 className="text-4xl font-serif font-black algeria-text-gradient">ثورة الأحرار</h2>
-               <p className="text-gray-400 leading-relaxed">
-                 للمشاركة في المنافسة التاريخية، يرجى تسجيل الدخول باستخدام حساب جوجل الخاص بك.
-               </p>
-            </div>
-            
-            <div className="flex flex-col gap-4">
-              <button 
-                onClick={loginWithGoogle}
-                className="w-full bg-[#c5a059] text-white py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-3 hover:bg-[#b08d48] transition-all shadow-[0_0_30px_rgba(197,160,89,0.3)]"
-              >
-                <Globe className="w-6 h-6" />
-                الدخول السريع (تحقق من النوافذ)
-              </button>
-
-              <button 
-                onClick={loginWithGoogleRedirect}
-                className="w-full bg-white/10 text-white py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 hover:bg-white/20 transition-all border border-white/10"
-              >
-                <LogIn className="w-6 h-6" />
-                تسجيل الدخول المباشر (للموبايل)
-              </button>
-            </div>
-            
-            {authError && (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-                <p className="text-red-500 text-sm font-bold">{authError}</p>
-              </div>
-            )}
-          </motion.div>
+      {/* Auth Error Toast */}
+      {authError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-red-600/90 text-white px-6 py-3 rounded-xl backdrop-blur-md shadow-2xl font-bold animate-bounce">
+          {authError}
         </div>
       )}
 
@@ -395,8 +377,17 @@ export default function App() {
               </div>
             </div>
             
-            <div className="text-xs text-gray-500 font-medium">
-              تاريخ الجزائر أمانة في أعناقنا • 1830 - 1962
+            <div className="text-xs text-gray-500 font-medium space-y-2">
+              <p>تاريخ الجزائر أمانة في أعناقنا • 1830 - 1962</p>
+              {!user?.email && (
+                <button 
+                  onClick={loginWithGoogle}
+                  className="opacity-20 hover:opacity-100 transition-opacity flex items-center gap-1 mx-auto"
+                >
+                  <Settings className="w-3 h-3" />
+                  تسجيل دخول الأستاذ
+                </button>
+              )}
             </div>
           </motion.div>
         ) : (
@@ -419,7 +410,10 @@ export default function App() {
                     onChange={(e) => setPlayerName(e.target.value)}
                 />
                 <button
-                    onClick={() => joinSession(sessionId, playerName)}
+                    onClick={async () => {
+                      await authenticate();
+                      joinSession(sessionId, playerName);
+                    }}
                     disabled={!playerName}
                     className="w-full algeria-gradient text-white py-4 rounded-xl font-black text-xl disabled:opacity-50"
                 >
