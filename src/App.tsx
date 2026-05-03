@@ -38,7 +38,7 @@ import PlayerGame from './components/PlayerGame';
 import FinalResults from './components/FinalResults';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | { uid: string; email?: string } | null>(null);
   const [playerName, setPlayerName] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [session, setSession] = useState<GameSession | null>(null);
@@ -56,6 +56,13 @@ export default function App() {
   const [playWinner] = useSound('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3');
 
   useEffect(() => {
+    // Check if guest ID exists
+    let guestId = localStorage.getItem('guest_id');
+    if (!guestId) {
+      guestId = 'guest_' + Math.random().toString(36).substring(2, 12);
+      localStorage.setItem('guest_id', guestId);
+    }
+
     // Check for code in URL
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
@@ -63,40 +70,20 @@ export default function App() {
       setSessionId(code.toUpperCase());
     }
 
-    // Handle Redirect Result
-    getRedirectResult(auth).then((result) => {
-      if (result) {
-        setUser(result.user);
-        setLoading(false);
-      }
-    }).catch((error) => {
-      console.error("Redirect auth error", error);
-      setAuthError(`خطأ في تسجيل الدخول (Redirect): ${error.message}`);
-    });
-
     return onAuthStateChanged(auth, (u) => {
-      setUser(u);
+      if (u) {
+        setUser(u);
+      } else {
+        setUser({ uid: guestId! });
+      }
       setLoading(false);
-      // If we have a user and they're not in the session yet, we'll wait for them to click join
     });
   }, [sessionId]);
 
   const authenticate = async () => {
-    if (user) return user;
-    try {
-      setLoading(true);
-      const res = await signInAnonymously(auth);
-      setUser(res.user);
-      setLoading(false);
-      return res.user;
-    } catch (error: any) {
-      console.error("Anonymous auth failed", error);
-      if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/operation-not-allowed') {
-        setAuthError("يرجى تفعيل 'الدخول المجهول' في إعدادات Firebase للمتابعة.");
-      }
-      setLoading(false);
-      return null;
-    }
+    // If we have any user (guest or real), we are good to go
+    if (user && user.uid) return user;
+    return user;
   };
 
   const loginWithGoogle = async () => {
