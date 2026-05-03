@@ -71,14 +71,13 @@ export default function App() {
   const authenticate = async () => {
     if (user) return user;
     try {
-      const res = await signInAnonymously(auth);
+      // In this environment, Google Auth is the pre-configured method.
+      // We'll trigger the login modal if not already signed in.
+      const res = await signInWithPopup(auth, googleProvider);
       return res.user;
     } catch (error: any) {
-      console.warn("Anonymous auth failed, trying Google...", error);
-      if (error.code === 'auth/admin-restricted-operation' || error.code === 'auth/operation-not-allowed') {
-        setAuthError("يرجى تسجيل الدخول باستخدام جوجل للمتابعة (أو تفعيل الدخول المجهول في Firebase)");
-        throw error;
-      }
+      console.error("Auth failed", error);
+      setAuthError("يرجى تسجيل الدخول باستخدام حساب جوجل للمتابعة.");
       throw error;
     }
   };
@@ -88,9 +87,9 @@ export default function App() {
       setLoading(true);
       await signInWithPopup(auth, googleProvider);
       setAuthError(null);
-      setLoading(false);
     } catch (error) {
       console.error(error);
+    } finally {
       setLoading(false);
     }
   };
