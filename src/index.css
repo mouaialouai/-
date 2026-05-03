@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Amiri", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --algeria-green: #006233;
+  --algeria-red: #d21034;
+  --algeria-white: #ffffff;
+  --luxury-gold: #c5a059;
+}
+
+body {
+  background-color: #05070a;
+  color: #e5e7eb;
+  font-family: var(--font-sans);
+  direction: rtl;
+}
+
+.luxury-card {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(197, 160, 89, 0.3);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+}
+
+.algeria-gradient {
+  background: linear-gradient(135deg, var(--algeria-green) 0%, #004d28 100%);
+}
+
+.algeria-text-gradient {
+  background: linear-gradient(135deg, var(--luxury-gold) 0%, #f9d976 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+

@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "GameSession": {
+      "title": "GameSession",
+      "description": "Represents a live quiz session",
+      "type": "object",
+      "properties": {
+        "hostId": { "type": "string" },
+        "status": { "type": "string", "enum": ["LOBBY", "STARTING", "QUESTION", "REVEAL", "LEADERBOARD", "FINAL_RESULTS"] },
+        "currentQuestionIndex": { "type": "integer" },
+        "questionCount": { "type": "integer" },
+        "questionIds": { "type": "array" },
+        "questionStartTime": { "type": "number" },
+        "winnerRecord": {
+          "type": "object",
+          "properties": {
+            "playerId": { "type": "string" },
+            "playerName": { "type": "string" },
+            "timeTaken": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["hostId", "status", "currentQuestionIndex", "questionCount", "questionIds", "createdAt"]
+    },
+    "Player": {
+      "title": "Player",
+      "description": "A participant in a quiz session",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "score": { "type": "integer" },
+        "correctCount": { "type": "integer" },
+        "totalTime": { "type": "number" },
+        "joinedAt": { "type": "number" },
+        "isHost": { "type": "boolean" }
+      },
+      "required": ["name", "score", "correctCount", "totalTime", "joinedAt"]
+    },
+    "Answer": {
+      "title": "Answer",
+      "description": "An answer submission from a player",
+      "type": "object",
+      "properties": {
+        "playerId": { "type": "string" },
+        "playerName": { "type": "string" },
+        "questionIndex": { "type": "integer" },
+        "isCorrect": { "type": "boolean" },
+        "timeTaken": { "type": "number" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["playerId", "playerName", "questionIndex", "isCorrect", "timeTaken", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": "GameSession",
+      "description": "Top-level session document"
+    },
+    "/sessions/{sessionId}/players/{playerId}": {
+      "schema": "Player",
+      "description": "Players in the session"
+    },
+    "/sessions/{sessionId}/answers/{answerId}": {
+      "schema": "Answer",
+      "description": "Answers submitted in the session"
+    }
+  }
+}
