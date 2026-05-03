@@ -15,7 +15,8 @@ import {
   increment, serverTimestamp 
 } from 'firebase/firestore';
 import { 
-  signInAnonymously, onAuthStateChanged, User, GoogleAuthProvider, signInWithPopup
+  signInAnonymously, onAuthStateChanged, User, GoogleAuthProvider, 
+  signInWithPopup, signInWithRedirect, getRedirectResult
 } from 'firebase/auth';
 import { 
   Trophy, Users, Play, LogIn, ChevronRight, RefreshCcw, 
@@ -62,6 +63,17 @@ export default function App() {
       setSessionId(code.toUpperCase());
     }
 
+    // Handle Redirect Result
+    getRedirectResult(auth).then((result) => {
+      if (result) {
+        setUser(result.user);
+        setLoading(false);
+      }
+    }).catch((error) => {
+      console.error("Redirect auth error", error);
+      setAuthError(`خطأ في تسجيل الدخول (Redirect): ${error.message}`);
+    });
+
     return onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
@@ -76,19 +88,33 @@ export default function App() {
       setUser(res.user);
       setAuthError(null);
     } catch (error: any) {
-      console.error(error);
+      console.error("Popup Error:", error);
       if (error.code === 'auth/popup-blocked') {
-        alert('يرجى السماح بالنوافذ المنبثقة (Popups) في متصفحك لتتمكن من تسجيل الدخول.');
+        setAuthError('تم حظر النافذة المنبثقة. جرب استخدام "تسجيل الدخول المباشر" بالأسفل.');
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        setAuthError('تم إغلاق نافذة تسجيل الدخول قبل إكمال العملية.');
       } else {
-        setAuthError("فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.");
+        setAuthError(`فشل تسجيل الدخول (${error.code}). جرب الطريقة البديلة.`);
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const loginWithGoogleRedirect = async () => {
+    try {
+      setLoading(true);
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error: any) {
+      console.error("Redirect Error:", error);
+      setAuthError(`فشل التوجيه: ${error.message}`);
+      setLoading(false);
+    }
+  };
+
   const authenticate = async () => {
     if (user) return user;
+    // For automatic auth flow, prefer popup if possible, else prompt
     return await loginWithGoogle().then(() => auth.currentUser);
   };
 
@@ -238,15 +264,29 @@ export default function App() {
                </p>
             </div>
             
-            <button 
-              onClick={loginWithGoogle}
-              className="w-full bg-[#c5a059] text-white py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-3 hover:bg-[#b08d48] transition-all shadow-[0_0_30px_rgba(197,160,89,0.3)]"
-            >
-              <Globe className="w-6 h-6" />
-              الدخول باستخدام جوجل
-            </button>
+            <div className="flex flex-col gap-4">
+              <button 
+                onClick={loginWithGoogle}
+                className="w-full bg-[#c5a059] text-white py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-3 hover:bg-[#b08d48] transition-all shadow-[0_0_30px_rgba(197,160,89,0.3)]"
+              >
+                <Globe className="w-6 h-6" />
+                الدخول السريع (تحقق من النوافذ)
+              </button>
+
+              <button 
+                onClick={loginWithGoogleRedirect}
+                className="w-full bg-white/10 text-white py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 hover:bg-white/20 transition-all border border-white/10"
+              >
+                <LogIn className="w-6 h-6" />
+                تسجيل الدخول المباشر (للموبايل)
+              </button>
+            </div>
             
-            {authError && <p className="text-red-500 text-sm font-bold">{authError}</p>}
+            {authError && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                <p className="text-red-500 text-sm font-bold">{authError}</p>
+              </div>
+            )}
           </motion.div>
         </div>
       )}
